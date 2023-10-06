@@ -1,0 +1,17 @@
+[package]
+name = "host-port-pair"
+version = "0.1.0"
+authors = ["EAimTY <ea.imty@gmail.com>"]
+description = "Host-port pair type"
+categories = ["data-structures", "encoding"]
+keywords = ["host", "port"]
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/EAimTY/host-port-pair"
+
+[dependencies]
+serde = { version = "1.0.188", features = ["derive"], optional = true }
+thiserror = "1.0.49"
+
+[dev-dependencies]
+"host-port-pair" = { path = ".", features = ["serde"] }
