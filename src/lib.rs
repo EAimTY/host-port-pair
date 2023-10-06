@@ -1,3 +1,5 @@
+#![doc = include_str!("../README.md")]
+
 use std::{
     fmt::{Display, Formatter, Result as FmtResult},
     net::SocketAddr,
@@ -6,6 +8,7 @@ use std::{
 };
 use thiserror::Error;
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum HostPortPair {
     SocketAddress(SocketAddr),
     DomainAddress(String, u16),
