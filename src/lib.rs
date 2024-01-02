@@ -2,7 +2,7 @@
 
 use std::{
     fmt::{Display, Formatter, Result as FmtResult},
-    net::SocketAddr,
+    net::{IpAddr, SocketAddr},
     num::ParseIntError,
     str::FromStr,
 };
@@ -14,7 +14,20 @@ pub enum HostPortPair {
     DomainAddress(String, u16),
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum Host {
+    Ip(IpAddr),
+    Domain(String),
+}
+
 impl HostPortPair {
+    pub fn host(&self) -> Host {
+        match self {
+            HostPortPair::SocketAddress(addr) => Host::Ip(addr.ip()),
+            HostPortPair::DomainAddress(host, _) => Host::Domain(host.to_owned()),
+        }
+    }
+
     pub fn port(&self) -> u16 {
         match self {
             HostPortPair::SocketAddress(addr) => addr.port(),
@@ -119,6 +132,15 @@ impl FromStr for HostPortPair {
         let port = port.parse()?;
 
         Ok(HostPortPair::DomainAddress(domain.to_owned(), port))
+    }
+}
+
+impl Display for Host {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        match self {
+            Host::Ip(ip) => write!(f, "{ip}"),
+            Host::Domain(domain) => write!(f, "{domain}"),
+        }
     }
 }
 
