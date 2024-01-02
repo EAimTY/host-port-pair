@@ -15,6 +15,13 @@ pub enum HostPortPair {
 }
 
 impl HostPortPair {
+    pub fn host(&self) -> String {
+        match self {
+            HostPortPair::SocketAddress(addr) => addr.ip().to_string(),
+            HostPortPair::DomainAddress(host, _) => host.to_string(),
+        }
+    }
+
     pub fn port(&self) -> u16 {
         match self {
             HostPortPair::SocketAddress(addr) => addr.port(),
