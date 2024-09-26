@@ -1,6 +1,6 @@
 [package]
 name = "host-port-pair"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["EAimTY <ea.imty@gmail.com>"]
 description = "Host-port pair type"
 categories = ["data-structures", "encoding"]
@@ -10,11 +10,12 @@ license = "MIT"
 repository = "https://github.com/EAimTY/host-port-pair"
 
 [dependencies]
+rkyv = { version = "0.8.8", features = ["std"], optional = true }
 serde = { version = "1.0.210", features = ["derive"], optional = true }
 thiserror = "1.0.64"
 
 [dev-dependencies]
-"host-port-pair" = { path = ".", features = ["serde"] }
+"host-port-pair" = { path = ".", features = ["rkyv", "serde"] }
 
 [package.metadata.docs.rs]
 all-features = true

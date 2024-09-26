@@ -8,12 +8,20 @@ use std::{
 };
 use thiserror::Error;
 
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum HostPortPair {
     SocketAddress(SocketAddr),
     DomainAddress(String, u16),
 }
 
+#[cfg_attr(
+    feature = "rkyv",
+    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
+)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Host<'a> {
     Ip(IpAddr),
@@ -21,10 +29,10 @@ pub enum Host<'a> {
 }
 
 impl HostPortPair {
-    pub fn host(&self) -> Host {
+    pub fn host(&self) -> Host<'_> {
         match self {
             HostPortPair::SocketAddress(addr) => Host::Ip(addr.ip()),
-            HostPortPair::DomainAddress(host, _) => Host::Domain(&host),
+            HostPortPair::DomainAddress(host, _) => Host::Domain(host),
         }
     }
 
