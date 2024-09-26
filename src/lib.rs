@@ -8,20 +8,23 @@ use std::{
 };
 use thiserror::Error;
 
-#[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
-)]
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum HostPortPair {
-    SocketAddress(SocketAddr),
-    DomainAddress(String, u16),
+pub use crate::host_port_pair::HostPortPair;
+
+mod host_port_pair {
+    use std::net::SocketAddr;
+
+    #[cfg_attr(
+        feature = "rkyv",
+        derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
+        rkyv(derive(Debug, Hash), compare(PartialEq))
+    )]
+    #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+    pub enum HostPortPair {
+        SocketAddress(SocketAddr),
+        DomainAddress(String, u16),
+    }
 }
 
-#[cfg_attr(
-    feature = "rkyv",
-    derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize)
-)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Host<'a> {
     Ip(IpAddr),
@@ -173,9 +176,9 @@ fn check_domain(domain: &str) -> Result<(), HostPortPairError> {
 }
 
 #[cfg(feature = "serde")]
-mod serde_impls {
+mod serde {
     use super::*;
-    use serde::{de::Error as DeError, Deserialize, Deserializer, Serialize, Serializer};
+    use ::serde::{de::Error as DeError, Deserialize, Deserializer, Serialize, Serializer};
 
     impl Serialize for HostPortPair {
         fn serialize<S: Serializer>(&self, ser: S) -> Result<S::Ok, S::Error> {
@@ -189,4 +192,9 @@ mod serde_impls {
             s.parse().map_err(DeError::custom)
         }
     }
+}
+
+#[cfg(feature = "rkyv")]
+pub mod rkyv {
+    pub use crate::host_port_pair::{ArchivedHostPortPair, HostPortPairResolver};
 }
