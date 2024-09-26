@@ -14,17 +14,17 @@ pub enum HostPortPair {
     DomainAddress(String, u16),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum Host {
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Host<'a> {
     Ip(IpAddr),
-    Domain(String),
+    Domain(&'a str),
 }
 
 impl HostPortPair {
     pub fn host(&self) -> Host {
         match self {
             HostPortPair::SocketAddress(addr) => Host::Ip(addr.ip()),
-            HostPortPair::DomainAddress(host, _) => Host::Domain(host.to_owned()),
+            HostPortPair::DomainAddress(host, _) => Host::Domain(&host),
         }
     }
 
@@ -135,7 +135,7 @@ impl FromStr for HostPortPair {
     }
 }
 
-impl Display for Host {
+impl Display for Host<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         match self {
             Host::Ip(ip) => write!(f, "{ip}"),
