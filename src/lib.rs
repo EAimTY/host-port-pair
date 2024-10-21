@@ -2,16 +2,16 @@
 
 use std::{
     fmt::{Display, Formatter, Result as FmtResult},
-    net::{IpAddr, SocketAddr},
+    net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6},
     num::ParseIntError,
     str::FromStr,
 };
 use thiserror::Error;
 
-pub use crate::host_port_pair::HostPortPair;
+pub use crate::host_port_pair::{Host, HostPortPair};
 
 mod host_port_pair {
-    use std::net::SocketAddr;
+    use std::net::IpAddr;
 
     #[cfg_attr(
         feature = "rkyv",
@@ -19,54 +19,138 @@ mod host_port_pair {
         rkyv(derive(Debug, Hash), compare(PartialEq))
     )]
     #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-    pub enum HostPortPair {
-        SocketAddress(SocketAddr),
-        DomainAddress(String, u16),
+    pub struct HostPortPair {
+        pub(crate) host: Host,
+        pub(crate) port: u16,
+    }
+
+    #[cfg_attr(
+        feature = "rkyv",
+        derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
+        rkyv(derive(Debug, Hash), compare(PartialEq))
+    )]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+    #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+    pub enum Host {
+        IpAddr(IpAddr),
+        DnsName(String),
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Host<'a> {
-    Ip(IpAddr),
-    Domain(&'a str),
+#[derive(Debug, Error)]
+pub enum HostPortPairError {
+    #[error("no port")]
+    NoPort,
+    #[error("invalid port: {0}")]
+    ParsePort(#[from] ParseIntError),
 }
 
 impl HostPortPair {
-    pub fn host(&self) -> Host<'_> {
-        match self {
-            HostPortPair::SocketAddress(addr) => Host::Ip(addr.ip()),
-            HostPortPair::DomainAddress(host, _) => Host::Domain(host),
-        }
+    pub fn host(&self) -> &Host {
+        &self.host
     }
 
     pub fn port(&self) -> u16 {
-        match self {
-            HostPortPair::SocketAddress(addr) => addr.port(),
-            HostPortPair::DomainAddress(_, port) => *port,
+        self.port
+    }
+
+    pub fn host_mut(&mut self) -> &mut Host {
+        &mut self.host
+    }
+
+    pub fn port_mut(&mut self) -> &mut u16 {
+        &mut self.port
+    }
+}
+
+impl Host {
+    pub fn is_ip_address(&self) -> bool {
+        matches!(self, Host::IpAddr(_))
+    }
+
+    pub fn is_dns_name(&self) -> bool {
+        matches!(self, Host::DnsName(_))
+    }
+}
+
+impl From<IpAddr> for Host {
+    fn from(ip: IpAddr) -> Self {
+        Host::IpAddr(ip)
+    }
+}
+
+impl From<Ipv4Addr> for Host {
+    fn from(ip: Ipv4Addr) -> Self {
+        Host::IpAddr(IpAddr::V4(ip))
+    }
+}
+
+impl From<Ipv6Addr> for Host {
+    fn from(ip: Ipv6Addr) -> Self {
+        Host::IpAddr(IpAddr::V6(ip))
+    }
+}
+
+impl From<String> for Host {
+    fn from(host: String) -> Self {
+        match host.parse() {
+            Ok(ip) => Host::IpAddr(ip),
+            Err(_) => Host::DnsName(host),
         }
     }
+}
 
-    pub fn is_ip_address(&self) -> bool {
-        matches!(self, HostPortPair::SocketAddress(_))
+impl From<&String> for Host {
+    fn from(host: &String) -> Self {
+        match host.parse() {
+            Ok(ip) => Host::IpAddr(ip),
+            Err(_) => Host::DnsName(host.clone()),
+        }
     }
+}
 
-    pub fn is_domain_address(&self) -> bool {
-        matches!(self, HostPortPair::DomainAddress(_, _))
+impl From<&str> for Host {
+    fn from(host: &str) -> Self {
+        match host.parse() {
+            Ok(ip) => Host::IpAddr(ip),
+            Err(_) => Host::DnsName(host.to_owned()),
+        }
+    }
+}
+
+impl<T: Into<Host>> From<(T, u16)> for HostPortPair {
+    fn from((host, port): (T, u16)) -> Self {
+        HostPortPair {
+            host: host.into(),
+            port,
+        }
     }
 }
 
 impl From<SocketAddr> for HostPortPair {
     fn from(addr: SocketAddr) -> Self {
-        HostPortPair::SocketAddress(addr)
+        HostPortPair {
+            host: Host::IpAddr(addr.ip()),
+            port: addr.port(),
+        }
     }
 }
 
-impl TryFrom<(String, u16)> for HostPortPair {
-    type Error = HostPortPairError;
+impl From<SocketAddrV4> for HostPortPair {
+    fn from(addr: SocketAddrV4) -> Self {
+        HostPortPair {
+            host: Host::from(*addr.ip()),
+            port: addr.port(),
+        }
+    }
+}
 
-    fn try_from((domain, port): (String, u16)) -> Result<Self, Self::Error> {
-        check_domain(&domain)?;
-        Ok(HostPortPair::DomainAddress(domain, port))
+impl From<SocketAddrV6> for HostPortPair {
+    fn from(addr: SocketAddrV6) -> Self {
+        HostPortPair {
+            host: Host::from(*addr.ip()),
+            port: addr.port(),
+        }
     }
 }
 
@@ -74,28 +158,34 @@ impl TryFrom<String> for HostPortPair {
     type Error = HostPortPairError;
 
     fn try_from(mut s: String) -> Result<Self, Self::Error> {
-        if let Ok(addr) = s.parse() {
-            return Ok(HostPortPair::SocketAddress(addr));
-        }
-
-        let Some((domain, port)) = s.rsplit_once(':') else {
+        let Some((host, port)) = s.rsplit_once(':') else {
             return Err(HostPortPairError::NoPort);
         };
 
-        check_domain(domain)?;
         let port = port.parse()?;
-        s.truncate(domain.len());
+        s.truncate(host.len());
 
-        Ok(HostPortPair::DomainAddress(s, port))
+        Ok(HostPortPair {
+            host: Host::from(s),
+            port,
+        })
     }
 }
 
-impl TryFrom<(&str, u16)> for HostPortPair {
+impl TryFrom<&String> for HostPortPair {
     type Error = HostPortPairError;
 
-    fn try_from((domain, port): (&str, u16)) -> Result<Self, Self::Error> {
-        check_domain(domain)?;
-        Ok(HostPortPair::DomainAddress(domain.to_owned(), port))
+    fn try_from(s: &String) -> Result<Self, Self::Error> {
+        let Some((host, port)) = s.rsplit_once(':') else {
+            return Err(HostPortPairError::NoPort);
+        };
+
+        let port = port.parse()?;
+
+        Ok(HostPortPair {
+            host: host.into(),
+            port,
+        })
     }
 }
 
@@ -103,27 +193,16 @@ impl TryFrom<&str> for HostPortPair {
     type Error = HostPortPairError;
 
     fn try_from(s: &str) -> Result<Self, Self::Error> {
-        if let Ok(addr) = s.parse() {
-            return Ok(HostPortPair::SocketAddress(addr));
-        }
-
-        let Some((domain, port)) = s.rsplit_once(':') else {
+        let Some((host, port)) = s.rsplit_once(':') else {
             return Err(HostPortPairError::NoPort);
         };
 
-        check_domain(domain)?;
         let port = port.parse()?;
 
-        Ok(HostPortPair::DomainAddress(domain.to_owned(), port))
-    }
-}
-
-impl Display for HostPortPair {
-    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
-        match self {
-            HostPortPair::SocketAddress(addr) => write!(f, "{addr}"),
-            HostPortPair::DomainAddress(domain, port) => write!(f, "{domain}:{port}"),
-        }
+        Ok(HostPortPair {
+            host: host.into(),
+            port,
+        })
     }
 }
 
@@ -131,48 +210,23 @@ impl FromStr for HostPortPair {
     type Err = HostPortPairError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        if let Ok(addr) = s.parse() {
-            return Ok(HostPortPair::SocketAddress(addr));
-        }
-
-        let Some((domain, port)) = s.rsplit_once(':') else {
-            return Err(HostPortPairError::NoPort);
-        };
-
-        check_domain(domain)?;
-        let port = port.parse()?;
-
-        Ok(HostPortPair::DomainAddress(domain.to_owned(), port))
+        Self::try_from(s)
     }
 }
 
-impl Display for Host<'_> {
+impl Display for Host {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         match self {
-            Host::Ip(ip) => write!(f, "{ip}"),
-            Host::Domain(domain) => write!(f, "{domain}"),
+            Host::IpAddr(ip) => write!(f, "{ip}"),
+            Host::DnsName(name) => write!(f, "{name}"),
         }
     }
 }
 
-#[derive(Debug, Error)]
-pub enum HostPortPairError {
-    #[error("no port provided")]
-    NoPort,
-    #[error("invalid character in domain at position {0}: {1}")]
-    InvalidCharacterInDomain(usize, char),
-    #[error("invalid port: {0}")]
-    ParsePort(#[from] ParseIntError),
-}
-
-fn check_domain(domain: &str) -> Result<(), HostPortPairError> {
-    for (idx, b) in domain.as_bytes().iter().enumerate() {
-        if !matches!(b, b'0'..=b'9' | b'a'..=b'z' | b'A'..=b'Z' | b'-' | b'.' | b'_') {
-            return Err(HostPortPairError::InvalidCharacterInDomain(idx, *b as char));
-        }
+impl Display for HostPortPair {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        write!(f, "{}:{}", self.host, self.port)
     }
-
-    Ok(())
 }
 
 #[cfg(feature = "serde")]
@@ -189,12 +243,14 @@ mod serde {
     impl<'de> Deserialize<'de> for HostPortPair {
         fn deserialize<D: Deserializer<'de>>(de: D) -> Result<Self, D::Error> {
             let s = String::deserialize(de)?;
-            s.parse().map_err(DeError::custom)
+            Self::try_from(s).map_err(DeError::custom)
         }
     }
 }
 
 #[cfg(feature = "rkyv")]
 pub mod rkyv {
-    pub use crate::host_port_pair::{ArchivedHostPortPair, HostPortPairResolver};
+    pub use crate::host_port_pair::{
+        ArchivedHost, ArchivedHostPortPair, HostPortPairResolver, HostResolver,
+    };
 }
