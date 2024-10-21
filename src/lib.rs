@@ -29,7 +29,6 @@ mod host_port_pair {
         derive(rkyv::Archive, rkyv::Serialize, rkyv::Deserialize),
         rkyv(derive(Debug, Hash), compare(PartialEq))
     )]
-    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
     #[derive(Debug, Clone, PartialEq, Eq, Hash)]
     pub enum Host {
         IpAddr(IpAddr),
@@ -250,6 +249,19 @@ mod serde {
         fn deserialize<D: Deserializer<'de>>(de: D) -> Result<Self, D::Error> {
             let s = String::deserialize(de)?;
             Self::try_from(s).map_err(DeError::custom)
+        }
+    }
+
+    impl Serialize for Host {
+        fn serialize<S: Serializer>(&self, ser: S) -> Result<S::Ok, S::Error> {
+            ser.collect_str(self)
+        }
+    }
+
+    impl<'de> Deserialize<'de> for Host {
+        fn deserialize<D: Deserializer<'de>>(de: D) -> Result<Self, D::Error> {
+            let s = String::deserialize(de)?;
+            Ok(Self::from(s))
         }
     }
 }
