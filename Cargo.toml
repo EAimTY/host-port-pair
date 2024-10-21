@@ -1,6 +1,6 @@
 [package]
 name = "host-port-pair"
-version = "0.2.0"
+version = "0.2.1"
 authors = ["EAimTY <ea.imty@gmail.com>"]
 description = "Host-port pair type"
 categories = ["data-structures", "encoding"]

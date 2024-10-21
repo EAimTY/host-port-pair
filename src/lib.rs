@@ -214,6 +214,12 @@ impl FromStr for HostPortPair {
     }
 }
 
+impl From<HostPortPair> for (Host, u16) {
+    fn from(pair: HostPortPair) -> Self {
+        (pair.host, pair.port)
+    }
+}
+
 impl Display for Host {
     fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
         match self {
