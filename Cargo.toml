@@ -1,21 +1,22 @@
 [package]
 name = "host-port-pair"
-version = "0.2.2"
+version = "0.2.3"
 authors = ["EAimTY <ea.imty@gmail.com>"]
-description = "Host-port pair type"
-categories = ["data-structures", "encoding"]
-keywords = ["host", "port"]
-edition = "2021"
+description = "Owned host and port pair type for DNS names and IP addresses"
+categories = ["data-structures", "encoding", "network-programming"]
+keywords = ["host", "port", "dns", "socket", "address"]
+edition = "2024"
 license = "MIT"
+readme = "./README.md"
 repository = "https://github.com/EAimTY/host-port-pair"
-
-[dependencies]
-rkyv = { version = "0.8.8", features = ["std"], optional = true }
-serde = { version = "1.0.210", features = ["derive"], optional = true }
-thiserror = "1.0.64"
 
 [dev-dependencies]
 "host-port-pair" = { path = ".", features = ["rkyv", "serde"] }
+
+[dependencies]
+rkyv = { version = "0.8.16", features = ["std"], optional = true }
+serde = { version = "1.0.228", features = ["derive"], optional = true }
+thiserror = "2.0.18"
 
 [package.metadata.docs.rs]
 all-features = true
